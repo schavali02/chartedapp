@@ -7,24 +7,47 @@
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
     "newArchEnabled": true,
+    "scheme": "charted",
     "splash": {
       "image": "./assets/splash-icon.png",
       "resizeMode": "contain",
-      "backgroundColor": "#ffffff"
+      "backgroundColor": "#000000"
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.schavali02.chartedapp",
+      "bundleIdentifier": "com.chartedapp.charted",
+      "buildNumber": "7",
+      "usesAppleSignIn": true,
+      "associatedDomains": [
+        "applinks:www.chartedapp.org"
+      ],
       "infoPlist": {
-        "ITSAppUsesNonExemptEncryption": false
+        "ITSAppUsesNonExemptEncryption": false,
+        "NSAppleMusicUsageDescription": "Charted needs access to your Apple Music library so you can share your favorite playlists and discover new ones from the community.",
+        "NSCameraUsageDescription": "This app needs access to your camera to allow you to share photos or update your profile picture."
       }
     },
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#ffffff"
+        "backgroundColor": "#000000"
       },
-      "edgeToEdgeEnabled": true
+      "edgeToEdgeEnabled": true,
+      "package": "com.schavali02.chartedapp",
+      "intentFilters": [
+        {
+          "action": "VIEW",
+          "autoVerify": true,
+          "data": [
+            {
+              "scheme": "https",
+              "host": "www.chartedapp.org",
+              "pathPrefix": "/playlist"
+            }
+          ],
+          "category": ["BROWSABLE", "DEFAULT"]
+        }
+      ]
     },
     "web": {
       "favicon": "./assets/favicon.png"
@@ -34,6 +57,26 @@
         "projectId": "378ca5ae-6a8a-48bc-b32a-99d00002ae92"
       }
     },
-    "owner": "schavali02"
+    "owner": "schavali02",
+    "plugins": [
+      "expo-asset",
+      "expo-font",
+      "expo-secure-store",
+      "expo-web-browser",
+      "expo-apple-authentication",
+      [
+        "@react-native-google-signin/google-signin",
+        {
+          "iosUrlScheme": "com.googleusercontent.apps.1023824427311-3a93e3i7o3hjivqgcjcfrelrej3pmmvc"
+        }
+      ],
+      [
+        "@stripe/stripe-react-native",
+        {
+          "merchantIdentifier": "merchant.com.chartedapp.charted",
+          "enableGooglePay": false
+        }
+      ]
+    ]
   }
 }
