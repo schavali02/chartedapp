@@ -12,7 +12,8 @@ import {
   Animated,
   Dimensions,
   Share,
-  Alert
+  Alert,
+  RefreshControl
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as SecureStore from 'expo-secure-store';
@@ -26,11 +27,10 @@ const PlaylistDetail = ({ navigation, route }) => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const { postId } = route.params || {};
+  const [refreshing, setRefreshing] = useState(false);
   
-  // State for vote and save functionality - simplified
-  const [voteStatus, setVoteStatus] = useState(null);
-  const [netVotes, setNetVotes] = useState(0);
-  const [isSaved, setIsSaved] = useState(false);
+  // State to track if data has changed on this screen
+  const [dataChanged, setDataChanged] = useState(false);
   
   // Move parsedTracks useMemo to component top level
   const parsedTracks = React.useMemo(() => {
@@ -46,6 +46,32 @@ const PlaylistDetail = ({ navigation, route }) => {
   // Base URL for API calls
   const baseUrl = 'http://10.0.0.107:8080';
   
+  useEffect(() => {
+    const unsubscribe = navigation.addListener('beforeRemove', (e) => {
+      console.log('[PlaylistDetail] beforeRemove triggered. dataChanged:', dataChanged);
+      if (!dataChanged) {
+        return;
+      }
+
+      // Prevent default behavior of leaving the screen
+      e.preventDefault();
+      
+      const state = navigation.getState();
+      console.log('[PlaylistDetail] Navigation state:', JSON.stringify(state, null, 2));
+
+      if (state.routes.length > 1) {
+        const prevRouteName = state.routes[state.routes.length - 2].name;
+        console.log(`[PlaylistDetail] Navigating back to ${prevRouteName} with refreshData: true`);
+        navigation.navigate(prevRouteName, { refreshData: true });
+      } else {
+        console.log('[PlaylistDetail] No previous route, dispatching default action.');
+        navigation.dispatch(e.data.action);
+      }
+    });
+
+    return unsubscribe;
+  }, [navigation, dataChanged]);
+
   // Immediate auth check on component mount (runs before anything else)
   useEffect(() => {
     const immediateAuthCheck = async () => {
@@ -107,6 +133,12 @@ const PlaylistDetail = ({ navigation, route }) => {
     checkAuthAndFetchPost();
   }, [postId, navigation]);
   
+  const onRefresh = React.useCallback(async () => {
+    setRefreshing(true);
+    await fetchPost();
+    setRefreshing(false);
+  }, [postId]);
+
   // OPTIMIZED: Fetch post with enriched data in a single request
   const fetchPost = async () => {
     try {
@@ -121,18 +153,11 @@ const PlaylistDetail = ({ navigation, route }) => {
         headers
       });
       
+      console.log(`[PlaylistDetail] Raw response from /api/posts/${postId}:`, JSON.stringify(response.data, null, 2));
+
       // Data is already enriched with vote and save information
       if (response.data) {
         const enrichedPost = response.data;
-        
-        // Set vote status and net votes from enriched data
-        setVoteStatus(
-          enrichedPost.userVote === 1 ? 'upvote' : 
-          enrichedPost.userVote === -1 ? 'downvote' : 
-          null
-        );
-        setNetVotes(enrichedPost.netVotes || 0);
-        setIsSaved(enrichedPost.isSaved || false);
         
         // Set post with enriched data
         setPost({
@@ -155,109 +180,94 @@ const PlaylistDetail = ({ navigation, route }) => {
   
   // Handle voting on posts
   const handleVote = async (voteType) => {
-    try {
-      const userId = await getUserId();
-      const headers = await getAuthHeaders();
-      
-      // First update UI optimistically
-      const prevVoteStatus = voteStatus;
-      const prevNetVotes = netVotes;
-      
-      // Calculate new vote status and net votes
-      let newVoteStatus;
-      let voteDiff;
-      
-      if (voteType === 'upvote') {
-        if (voteStatus === 'upvote') {
-          newVoteStatus = null;
-          voteDiff = -1;
-        } else if (voteStatus === 'downvote') {
-          newVoteStatus = 'upvote';
-          voteDiff = 2;
-        } else {
-          newVoteStatus = 'upvote';
-          voteDiff = 1;
-        }
-      } else { // downvote
-        if (voteStatus === 'downvote') {
-          newVoteStatus = null;
-          voteDiff = 1;
-        } else if (voteStatus === 'upvote') {
-          newVoteStatus = 'downvote';
-          voteDiff = -2;
-        } else {
-          newVoteStatus = 'downvote';
-          voteDiff = -1;
-        }
-      }
-      
-      // Update UI state
-      setVoteStatus(newVoteStatus);
-      setNetVotes(prevNetVotes + voteDiff);
-      
-      // Prepare vote value for API
-      const voteValue = newVoteStatus === 'upvote' ? 1 : newVoteStatus === 'downvote' ? -1 : 0;
-      
-      // Check if we're toggling off a vote
-      if (voteValue === 0) {
-        // Delete the vote
-        await axios.delete(`${baseUrl}/api/votes`, {
-          params: {
-            postId: parseInt(postId),
-            userId: parseInt(userId)
-          },
-          headers
-        });
+    if (!post) return;
+
+    const originalPost = { ...post };
+
+    // Optimistic UI update
+    let newVoteStatus = post.userVote;
+    let voteChange = 0;
+
+    if (voteType === 'upvote') {
+      if (post.userVote === 1) { // un-upvote
+        newVoteStatus = 0;
+        voteChange = -1;
       } else {
-        // Create or update vote
-        const voteData = {
-          postId: parseInt(postId),
-          userId: parseInt(userId),
-          voteValue: voteValue,
-          createdAt: new Date().toISOString()
-        };
-        
-        await axios.post(`${baseUrl}/api/votes`, voteData, { headers });
+        voteChange = 1 - (post.userVote || 0);
+        newVoteStatus = 1;
       }
+    } else { // downvote
+      if (post.userVote === -1) { // un-downvote
+        newVoteStatus = 0;
+        voteChange = 1;
+      } else {
+        voteChange = -1 - (post.userVote || 0);
+        newVoteStatus = -1;
+      }
+    }
+
+    setPost({
+        ...post,
+        userVote: newVoteStatus,
+        votes: post.votes + voteChange,
+    });
+    console.log('[PlaylistDetail] Vote action occurred, setting dataChanged to true.');
+    setDataChanged(true);
+
+    try {
+        const userId = await getUserId();
+        const headers = await getAuthHeaders();
+
+        let response;
+        if (newVoteStatus === 0) {
+            response = await axios.delete(`${baseUrl}/api/votes`, { params: { postId: post.postId, userId }, headers });
+        } else {
+            response = await axios.post(`${baseUrl}/api/votes`, { postId: post.postId, userId: parseInt(userId), voteValue: newVoteStatus }, { headers });
+        }
+
+        // Update with authoritative data from server
+        if (response.data) {
+          setPost(response.data);
+        }
+
     } catch (error) {
-      // Revert UI on error
-      setVoteStatus(prevVoteStatus);
-      setNetVotes(prevNetVotes);
-      handleApiError(error, navigation);
+        // Revert UI on error
+        setPost(originalPost);
+        handleApiError(error, navigation);
     }
   };
   
-
-  
   // Handle save/unsave
   const handleSave = async () => {
+    if (!post) return;
+
+    const originalPost = { ...post };
+    // Optimistic update
+    setPost({ ...post, isSaved: !post.isSaved });
+    console.log('[PlaylistDetail] Save action occurred, setting dataChanged to true.');
+    setDataChanged(true);
+    
     try {
       const userId = await getUserId();
       const headers = await getAuthHeaders();
       
-      // Optimistic update
-      const prevSaved = isSaved;
-      setIsSaved(!isSaved);
-      
-      if (prevSaved) {
+      let response;
+      if (originalPost.isSaved) {
         // Unsave the post
-        await axios.delete(`${baseUrl}/api/saved-posts`, {
-          params: {
-            userId: parseInt(userId),
-            postId: parseInt(postId)
-          },
-          headers
-        });
+        response = await axios.delete(`${baseUrl}/api/saved-posts`, { params: { userId: parseInt(userId), postId: post.postId }, headers });
       } else {
         // Save the post
-        await axios.post(`${baseUrl}/api/saved-posts`, {
-          userId: parseInt(userId),
-          postId: parseInt(postId)
-        }, { headers });
+        response = await axios.post(`${baseUrl}/api/saved-posts`, { userId: parseInt(userId), postId: post.postId }, { headers });
       }
+
+      // Update with authoritative data from server
+      if (response.data) {
+        setPost(response.data);
+      }
+
     } catch (error) {
       // Revert optimistic update on error
-      setIsSaved(!isSaved);
+      setPost(originalPost);
       handleApiError(error, navigation);
     }
   };
@@ -286,6 +296,31 @@ const PlaylistDetail = ({ navigation, route }) => {
     } catch (error) {
       console.error('Error sharing playlist:', error);
       // No auth check needed for Share API
+    }
+  };
+
+  const navigateToUserOrProfile = async (targetUsername) => {
+    try {
+      // Get the current user's username from SecureStore
+      const currentUsername = await SecureStore.getItemAsync('username');
+      
+      // If the username clicked matches the current user, go to Profile
+      // Otherwise go to the User screen for that username
+      if (targetUsername === currentUsername) {
+        navigation.navigate('ProfileStack');
+      } else {
+        navigation.navigate('HomeStack', { 
+            screen: 'User', 
+            params: { username: targetUsername }
+        });
+      }
+    } catch (error) {
+      console.error('Error in navigateToUserOrProfile:', error);
+      // Default to User screen if there's an error
+      navigation.navigate('HomeStack', { 
+        screen: 'User', 
+        params: { username: targetUsername }
+      });
     }
   };
 
@@ -358,7 +393,7 @@ const PlaylistDetail = ({ navigation, route }) => {
             <Text style={styles.playlistName}>{post.playlistName}</Text>
             <TouchableOpacity 
               onPress={() => {
-                navigation.navigate('User', { username: post.username });
+                navigateToUserOrProfile(post.username);
               }}
             >
               <Text style={styles.playlistUser}>@{post.username}</Text>
@@ -407,19 +442,19 @@ const PlaylistDetail = ({ navigation, route }) => {
               onPress={() => handleVote('upvote')}
             >
               <Ionicons 
-                name={voteStatus === 'upvote' ? "arrow-up" : "arrow-up-outline"} 
+                name={post.userVote === 1 ? "arrow-up" : "arrow-up-outline"} 
                 size={24} 
-                color={voteStatus === 'upvote' ? "#4CAF50" : "#FFFFFF"} 
+                color={post.userVote === 1 ? "#4CAF50" : "#FFFFFF"} 
               />
             </TouchableOpacity>
             
             <Text style={[
               styles.voteCountText, 
-              voteStatus === 'upvote' ? styles.upvotedText : 
-              voteStatus === 'downvote' ? styles.downvotedText : 
+              post.userVote === 1 ? styles.upvotedText : 
+              post.userVote === -1 ? styles.downvotedText : 
               styles.neutralVoteText
             ]}>
-              {netVotes}
+              {post.votes}
             </Text>
             
             <TouchableOpacity 
@@ -427,9 +462,9 @@ const PlaylistDetail = ({ navigation, route }) => {
               onPress={() => handleVote('downvote')}
             >
               <Ionicons 
-                name={voteStatus === 'downvote' ? "arrow-down" : "arrow-down-outline"} 
+                name={post.userVote === -1 ? "arrow-down" : "arrow-down-outline"} 
                 size={24} 
-                color={voteStatus === 'downvote' ? "#F44336" : "#FFFFFF"} 
+                color={post.userVote === -1 ? "#F44336" : "#FFFFFF"} 
               />
             </TouchableOpacity>
             
@@ -458,9 +493,9 @@ const PlaylistDetail = ({ navigation, route }) => {
             onPress={handleSave}
           >
             <Ionicons 
-              name={isSaved ? "bookmark" : "bookmark-outline"} 
+              name={post.isSaved ? "bookmark" : "bookmark-outline"} 
               size={24} 
-              color={isSaved ? "#FFD700" : "#FFFFFF"} 
+              color={post.isSaved ? "#FFD700" : "#FFFFFF"} 
             />
           </TouchableOpacity>
         </View>
@@ -470,7 +505,7 @@ const PlaylistDetail = ({ navigation, route }) => {
           <View style={{ flexDirection: 'row' }}>
             <TouchableOpacity 
               onPress={() => {
-                navigation.navigate('User', { username: post.username });
+                navigateToUserOrProfile(post.username);
               }}
             >
               <Text style={styles.captionUsername}>@{post.username}</Text>
@@ -488,37 +523,7 @@ const PlaylistDetail = ({ navigation, route }) => {
       <View style={styles.header}>
         <TouchableOpacity 
           style={styles.backButton}
-          onPress={() => {
-            // Handle back navigation - check if there's navigation history
-            if (navigation.canGoBack()) {
-              navigation.goBack();
-            } else {
-              // If we can't go back (deep link), go to login or home
-              SecureStore.getItemAsync('jwtToken')
-                .then(token => {
-                  if (token) {
-                    // If authenticated, go to home
-                    navigation.reset({
-                      index: 0,
-                      routes: [{ name: 'Home' }],
-                    });
-                  } else {
-                    // If not authenticated, go to login
-                    navigation.reset({
-                      index: 0,
-                      routes: [{ name: 'LoginOptions' }],
-                    });
-                  }
-                })
-                .catch(() => {
-                  // Default to login on error
-                  navigation.reset({
-                    index: 0,
-                    routes: [{ name: 'LoginOptions' }],
-                  });
-                });
-            }
-          }}
+          onPress={() => navigation.goBack()}
         >
           <Ionicons name="chevron-back" size={24} color="#FFFFFF" />
         </TouchableOpacity>
@@ -527,7 +532,16 @@ const PlaylistDetail = ({ navigation, route }) => {
       </View>
       
       {/* Main Content */}
-      <ScrollView style={styles.scrollView}>
+      <ScrollView 
+        style={styles.scrollView}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor="#FFFFFF"
+          />
+        }
+      >
         {loading ? (
           <View style={styles.loadingContainer}>
             <ActivityIndicator size="large" color="#FFFFFF" />

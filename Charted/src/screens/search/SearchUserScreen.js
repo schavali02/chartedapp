@@ -24,6 +24,31 @@ const SearchUserScreen = ({ route, navigation }) => {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
   
+  const navigateToUserOrProfile = async (targetUsername) => {
+    if (!targetUsername) return; // Prevent navigation if username is missing
+    try {
+      const currentUsername = await SecureStore.getItemAsync('username');
+      
+      if (targetUsername === currentUsername) {
+        // Navigate to own profile tab
+        navigation.navigate('ProfileStack');
+      } else {
+        // Navigate to other user's screen in the Home stack
+        navigation.navigate('HomeStack', { 
+          screen: 'User', 
+          params: { username: targetUsername }
+        });
+      }
+    } catch (error) {
+      console.error('Error navigating to user profile:', error);
+      // Fallback navigation
+      navigation.navigate('HomeStack', { 
+        screen: 'User', 
+        params: { username: targetUsername }
+      });
+    }
+  };
+
   // Helper function to get auth headers
   const getAuthHeaders = async () => {
     const token = await SecureStore.getItemAsync('jwtToken');
@@ -69,10 +94,7 @@ const SearchUserScreen = ({ route, navigation }) => {
     <TouchableOpacity 
       key={user.userId || user.id}
       style={styles.searchResultItem}
-              onPress={() => navigation.navigate('HomeStack', { 
-          screen: 'User', 
-          params: { username: user.username }
-        })}
+      onPress={() => navigateToUserOrProfile(user.username)}
     >
       <View style={styles.userInfoContainer}>
         <Text style={styles.usernameText}>@{user.username}</Text>

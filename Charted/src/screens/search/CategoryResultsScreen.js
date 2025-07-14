@@ -59,14 +59,24 @@ const CategoryResultsScreen = ({ route, navigation }) => {
   // Add state for report reasons
   const [showReportReasons, setShowReportReasons] = useState(false);
   
+  useEffect(() => {
+    // This effect runs once when the component mounts to fetch initial data.
+    fetchPlaylists(selectedFilter, true);
+  }, [categoryName]); // It will re-run only if the category itself changes.
+
   // Add useFocusEffect to refresh the screen when returning from other screens
   useFocusEffect(
     React.useCallback(() => {
-      fetchPlaylists(selectedFilter, true);
-      return () => {
-        // Cleanup function when screen loses focus
-      };
-    }, [categoryName, selectedFilter])
+      const refreshRequired = route.params?.refreshData === true;
+      console.log('CategoryResultsScreen focused, refreshRequired:', refreshRequired, 'Params:', route.params);
+      if (refreshRequired) {
+        console.log('CategoryResultsScreen focused with refresh required, refetching data.');
+        // Re-fetch data for the current filter
+        fetchPlaylists(selectedFilter, true);
+        // Reset the param to avoid re-fetching on subsequent focus events
+        navigation.setParams({ refreshData: false });
+      }
+    }, [route.params?.refreshData])
   );
   
   // Base URL for API calls

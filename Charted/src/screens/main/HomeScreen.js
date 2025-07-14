@@ -74,7 +74,7 @@ const HomeScreen = ({ navigation, route }) => {
       if (isMounted.current) {
         // Check if we have a refreshData flag in the route params
         const refreshRequired = route.params?.refreshData === true;
-        console.log('HomeScreen focused, refreshRequired:', refreshRequired);
+        console.log('HomeScreen focused, refreshRequired:', refreshRequired, 'Params:', route.params);
         
         if (refreshRequired) {
           console.log('Refreshing HomeScreen data after edit/post');
@@ -91,6 +91,17 @@ const HomeScreen = ({ navigation, route }) => {
       };
     }, [route.params?.refreshData, selectedFilter, navigation])
   );
+
+  // Function to handle filter change
+  const handleFilterChange = (filter) => {
+    hideFilterSheet();
+    // Prevent re-fetching if the filter is the same
+    if (filter !== selectedFilter) {
+      setSelectedFilter(filter);
+      // Fetch posts with the new filter and reset pagination
+      fetchPosts(filter, true);
+    }
+  };
 
   // Function to show the filter modal with animation
   const showFilterSheet = () => {
@@ -978,22 +989,48 @@ const HomeScreen = ({ navigation, route }) => {
           <TouchableOpacity 
             style={styles.modalOverlay}
             activeOpacity={1}
-            onPressOut={hideFilterSheet}
+            onPress={hideFilterSheet}
           >
-            <Animated.View 
-              style={[styles.bottomSheet, { transform: [{ translateY }] }]}
-            >
-              <View style={styles.handle} />
-              <TouchableOpacity style={styles.filterItem} onPress={() => handleFilterChange('New')}>
-                <Text style={styles.filterText}>New</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.filterItem} onPress={() => handleFilterChange('Hot')}>
-                <Text style={styles.filterText}>Hot</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.filterItem} onPress={() => handleFilterChange('Following')}>
-                <Text style={styles.filterText}>Following</Text>
-              </TouchableOpacity>
-            </Animated.View>
+            <TouchableOpacity activeOpacity={1} onPress={(e) => e.stopPropagation()}>
+              <Animated.View 
+                style={[styles.filterBottomSheet, { transform: [{ translateY }] }]}
+              >
+                <View style={styles.filterHeader}>
+                  <Text style={styles.filterTitle}>SORT POSTS BY</Text>
+                </View>
+
+                <TouchableOpacity 
+                  style={[styles.filterOption, selectedFilter === 'New' && styles.selectedOption]}
+                  onPress={() => handleFilterChange('New')}
+                >
+                  <Ionicons name="time-outline" size={24} color={selectedFilter === 'New' ? "#007AFF" : "#FFFFFF"} />
+                  <Text style={[styles.filterOptionText, selectedFilter === 'New' && styles.selectedOptionText]}>New</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity 
+                  style={[styles.filterOption, selectedFilter === 'Hot' && styles.selectedOption]}
+                  onPress={() => handleFilterChange('Hot')}
+                >
+                  <Ionicons name="flame-outline" size={24} color={selectedFilter === 'Hot' ? "#007AFF" : "#FFFFFF"} />
+                  <Text style={[styles.filterOptionText, selectedFilter === 'Hot' && styles.selectedOptionText]}>Hot</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity 
+                  style={[styles.filterOption, selectedFilter === 'Following' && styles.selectedOption]}
+                  onPress={() => handleFilterChange('Following')}
+                >
+                  <Ionicons name="people-outline" size={24} color={selectedFilter === 'Following' ? "#007AFF" : "#FFFFFF"} />
+                  <Text style={[styles.filterOptionText, selectedFilter === 'Following' && styles.selectedOptionText]}>Following</Text>
+                </TouchableOpacity>
+                
+                <TouchableOpacity 
+                  style={styles.closeButtonContainer}
+                  onPress={hideFilterSheet}
+                >
+                  <Text style={styles.closeButtonText}>Close</Text>
+                </TouchableOpacity>
+              </Animated.View>
+            </TouchableOpacity>
           </TouchableOpacity>
         </Modal>
       )}
@@ -1009,14 +1046,123 @@ const HomeScreen = ({ navigation, route }) => {
           <TouchableOpacity 
             style={styles.modalOverlay}
             activeOpacity={1}
-            onPressOut={hideOptionsSheet}
+            onPress={hideOptionsSheet}
           >
-            <Animated.View 
-              style={[styles.bottomSheet, { transform: [{ translateY: optionsTranslateY }] }]}
-            >
-              <View style={styles.handle} />
-              {renderOptions()}
-            </Animated.View>
+            <TouchableOpacity activeOpacity={1} onPress={(e) => e.stopPropagation()}>
+              <Animated.View 
+                style={[styles.optionsBottomSheet, { transform: [{ translateY: optionsTranslateY }] }]}
+              >
+                <View style={styles.handle} />
+                {!showReportReasons ? (
+                  <>
+                    <View style={styles.optionsList}>
+                      {isOwnPlaylist ? (
+                        <>
+                          <TouchableOpacity 
+                            style={styles.optionItem}
+                            onPress={() => {
+                              hideOptionsSheet();
+                              navigation.navigate('EditCaption', { 
+                                postId: selectedPostId,
+                                caption: posts.find(p => p.postId === selectedPostId)?.caption || ''
+                              });
+                            }}
+                          >
+                            <Ionicons name="pencil" size={24} color="#FFFFFF" />
+                            <Text style={styles.optionText}>Edit caption</Text>
+                            <View style={styles.optionRightIcon}>
+                              <Ionicons name="chevron-forward" size={20} color="#777777" />
+                            </View>
+                          </TouchableOpacity>
+                          
+                          <TouchableOpacity 
+                            style={styles.optionItem}
+                            onPress={() => {
+                              hideOptionsSheet();
+                              navigation.navigate('ChangeCategories', { 
+                                postId: selectedPostId,
+                                categories: posts.find(p => p.postId === selectedPostId)?.categories || []
+                              });
+                            }}
+                          >
+                            <Ionicons name="pricetag" size={24} color="#FFFFFF" />
+                            <Text style={styles.optionText}>Change categories</Text>
+                            <View style={styles.optionRightIcon}>
+                              <Ionicons name="chevron-forward" size={20} color="#777777" />
+                            </View>
+                          </TouchableOpacity>
+
+                          <TouchableOpacity 
+                            style={styles.optionItem}
+                            onPress={() => {
+                              hideOptionsSheet();
+                              handleUpdatePlaylist(selectedPostId);
+                            }}
+                          >
+                            <Ionicons name="refresh" size={24} color="#FFFFFF" />
+                            <Text style={styles.optionText}>Update playlist</Text>
+                          </TouchableOpacity>
+                          <TouchableOpacity 
+                            style={[styles.optionItem, styles.deleteOption]}
+                            onPress={() => {
+                              hideOptionsSheet();
+                              showDeleteConfirmation(selectedPostId);
+                            }}
+                          >
+                            <Ionicons name="trash" size={24} color="#FF3B30" />
+                            <Text style={[styles.optionText, styles.deleteText]}>Delete playlist</Text>
+                          </TouchableOpacity>
+                        </>
+                      ) : (
+                        <TouchableOpacity 
+                          style={styles.optionItem}
+                          onPress={handleReportPlaylist}
+                        >
+                          <Ionicons name="flag-outline" size={24} color="#FFA500" />
+                          <Text style={[styles.optionText, styles.reportText]}>Report playlist</Text>
+                          <View style={styles.optionRightIcon}>
+                            <Ionicons name="chevron-forward" size={20} color="#777777" />
+                          </View>
+                        </TouchableOpacity>
+                      )}
+                    </View>
+                    <TouchableOpacity 
+                      style={styles.closeButtonContainer}
+                      onPress={hideOptionsSheet}
+                    >
+                      <Text style={styles.closeButtonText}>Cancel</Text>
+                    </TouchableOpacity>
+                  </>
+                ) : (
+                  <>
+                    <View style={styles.reportReasonsHeader}>
+                      <TouchableOpacity 
+                        style={styles.backToOptionsButton}
+                        onPress={handleBackToOptions}
+                      >
+                        <Ionicons name="chevron-back" size={24} color="#FFFFFF" />
+                      </TouchableOpacity>
+                      <Text style={styles.reportReasonsTitle}>Why are you reporting this?</Text>
+                      <View style={styles.headerSpacer} />
+                    </View>
+                    <View style={styles.reportReasonsList}>
+                      <TouchableOpacity style={styles.reportReasonItem} onPress={() => handleReportReason('Inappropriate content')}>
+                        <Text style={styles.reportReasonText}>Inappropriate content</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity style={styles.reportReasonItem} onPress={() => handleReportReason('Spam')}>
+                        <Text style={styles.reportReasonText}>Spam</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity style={styles.reportReasonItem} onPress={() => handleReportReason('Hate speech')}>
+                        <Text style={styles.reportReasonText}>Hate speech</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity style={styles.reportReasonItem} onPress={() => handleReportReason('Other')}>
+                        <Text style={styles.reportReasonText}>Other</Text>
+                      </TouchableOpacity>
+                    </View>
+                  </>
+                )}
+              </Animated.View>
+            </TouchableOpacity>
           </TouchableOpacity>
         </Modal>
       )}

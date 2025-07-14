@@ -138,6 +138,31 @@ const SearchScreen = ({ navigation }) => {
     }
   };
 
+  const navigateToUserOrProfile = async (targetUsername) => {
+    if (!targetUsername) return; // Prevent navigation if username is missing
+    try {
+      const currentUsername = await SecureStore.getItemAsync('username');
+      
+      if (targetUsername === currentUsername) {
+        // Navigate to own profile tab
+        navigation.navigate('ProfileStack');
+      } else {
+        // Navigate to other user's screen in the Home stack
+        navigation.navigate('HomeStack', { 
+          screen: 'User', 
+          params: { username: targetUsername }
+        });
+      }
+    } catch (error) {
+      console.error('Error navigating to user profile:', error);
+      // Fallback navigation
+      navigation.navigate('HomeStack', { 
+        screen: 'User', 
+        params: { username: targetUsername }
+      });
+    }
+  };
+
   // Function to handle navigation
   const navigateTo = (screenName) => {
     navigation.navigate(screenName);
@@ -248,7 +273,7 @@ const SearchScreen = ({ navigation }) => {
       <View style={styles.mediaInfoContainer}>
         <Text style={styles.mediaTitle}>{item.playlistName || item.name}</Text>
         <Text style={styles.mediaSubtitle}>
-          {item.username || item.author}
+          @{item.username || item.author}
         </Text>
       </View>
       <Ionicons name="chevron-forward" size={20} color="#777777" />
@@ -259,7 +284,7 @@ const SearchScreen = ({ navigation }) => {
   const renderUserItem = (user) => (
     <TouchableOpacity 
       style={styles.searchResultItem}
-      onPress={() => navigation.navigate('User', { username: user.username })}
+      onPress={() => navigateToUserOrProfile(user.username)}
     >
       <View style={styles.userInfoContainer}>
         <Text style={styles.usernameText}>@{user.username}</Text>

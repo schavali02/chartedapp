@@ -20,9 +20,10 @@ import { Ionicons } from '@expo/vector-icons';
 import * as SecureStore from 'expo-secure-store';
 import axios from 'axios';
 import * as Linking from 'expo-linking';
+import { useFocusEffect } from '@react-navigation/native';
 import { handleApiError, getAuthHeaders, getUserId } from '../../utils/errorUtils';
 
-const ProfileScreen = ({ navigation }) => {
+const ProfileScreen = ({ navigation, route }) => {
   const [activeTab, setActiveTab] = useState('playlists');
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
@@ -90,6 +91,26 @@ const ProfileScreen = ({ navigation }) => {
       following: 315,
     },
   };
+
+  useFocusEffect(
+    React.useCallback(() => {
+      const refreshRequired = route.params?.refreshData === true;
+      console.log('ProfileScreen focused, refreshRequired:', refreshRequired, 'Params:', route.params);
+      if (refreshRequired) {
+        console.log('ProfileScreen focused with refresh required, refetching data.');
+        // Refresh the data for the currently active tab
+        if (activeTab === 'playlists') {
+          fetchUserPosts(true);
+        } else if (activeTab === 'saved') {
+          fetchSavedPlaylists(true);
+        }
+        // Also refresh the user data like follower counts
+        fetchUserData();
+        // Reset the param to avoid re-fetching on subsequent focus events
+        navigation.setParams({ refreshData: false });
+      }
+    }, [route.params?.refreshData, activeTab])
+  );
 
   // Add a ref to track component mounted state
   const isMounted = React.useRef(true);

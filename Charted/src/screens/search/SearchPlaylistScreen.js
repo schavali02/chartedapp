@@ -17,6 +17,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import axios from 'axios';
 import * as SecureStore from 'expo-secure-store';
+import { useFocusEffect } from '@react-navigation/native';
 
 // Base URL for API calls
 const BASE_URL = 'http://10.0.0.107:8080';
@@ -40,6 +41,31 @@ const SearchPlaylistScreen = ({ route, navigation }) => {
   // Get screen dimensions for more accurate animation
   const screenHeight = Dimensions.get('window').height;
   
+  const navigateToUserOrProfile = async (targetUsername) => {
+    if (!targetUsername) return; // Prevent navigation if username is missing
+    try {
+      const currentUsername = await SecureStore.getItemAsync('username');
+      
+      if (targetUsername === currentUsername) {
+        // Navigate to own profile tab
+        navigation.navigate('ProfileStack');
+      } else {
+        // Navigate to other user's screen in the Home stack
+        navigation.navigate('HomeStack', { 
+          screen: 'User', 
+          params: { username: targetUsername }
+        });
+      }
+    } catch (error) {
+      console.error('Error navigating to user profile:', error);
+      // Fallback navigation
+      navigation.navigate('HomeStack', { 
+        screen: 'User', 
+        params: { username: targetUsername }
+      });
+    }
+  };
+
   // Helper function to get auth headers
   const getAuthHeaders = async () => {
     const token = await SecureStore.getItemAsync('jwtToken');
@@ -51,35 +77,46 @@ const SearchPlaylistScreen = ({ route, navigation }) => {
     };
   };
   
+  const fetchPlaylists = async () => {
+    setIsLoading(true);
+    setError(null);
+    
+    try {
+      const headers = await getAuthHeaders();
+      const response = await axios.get(`${BASE_URL}/api/search?q=${encodeURIComponent(query)}&enriched=true`, { headers });
+      
+      // Validate the response structure
+      if (response.data && Array.isArray(response.data.playlists)) {
+        setPlaylists(response.data.playlists);
+      } else {
+        setError('Invalid response format from server.');
+        setPlaylists([]);
+      }
+    } catch (error) {
+      console.error('Search playlists error:', error);
+      setError('Failed to fetch playlists. Please try again.');
+      setPlaylists([]);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+  
   // Fetch playlists from API when component mounts or query changes
   useEffect(() => {
-    const fetchPlaylists = async () => {
-      setIsLoading(true);
-      setError(null);
-      
-      try {
-        const headers = await getAuthHeaders();
-        const response = await axios.get(`${BASE_URL}/api/search?q=${encodeURIComponent(query)}`, { headers });
-        
-        // Validate the response structure
-        if (response.data && Array.isArray(response.data.playlists)) {
-          setPlaylists(response.data.playlists);
-        } else {
-          setError('Invalid response format from server.');
-          setPlaylists([]);
-        }
-      } catch (error) {
-        console.error('Search playlists error:', error);
-        setError('Failed to fetch playlists. Please try again.');
-        setPlaylists([]);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-    
     fetchPlaylists();
   }, [query]);
   
+  useFocusEffect(
+    React.useCallback(() => {
+      const refreshRequired = route.params?.refreshData === true;
+      if (refreshRequired) {
+        console.log('SearchPlaylistScreen focused with refresh required, refetching data.');
+        fetchPlaylists();
+        navigation.setParams({ refreshData: false });
+      }
+    }, [route.params?.refreshData])
+  );
+
   // Apply selected filter to playlists
   const applyFilter = (filterType) => {
     setSelectedFilter(filterType);
@@ -170,7 +207,9 @@ const SearchPlaylistScreen = ({ route, navigation }) => {
       </View>
       <View style={styles.mediaInfoContainer}>
                   <Text style={styles.mediaTitle}>{item.playlistName || item.name}</Text>
-        <Text style={styles.mediaSubtitle}>{item.username || item.author}</Text>
+        <TouchableOpacity onPress={() => navigateToUserOrProfile(item.username)}>
+          <Text style={styles.mediaSubtitle}>@{item.username || item.author}</Text>
+        </TouchableOpacity>
       </View>
       <Ionicons name="chevron-forward" size={20} color="#777777" />
     </TouchableOpacity>

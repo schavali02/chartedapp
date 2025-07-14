@@ -15,6 +15,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import * as SecureStore from 'expo-secure-store';
 import axios from 'axios';
+import { useFocusEffect } from '@react-navigation/native';
 
 const UserScreen = ({ navigation, route }) => {
   // Get the username from route params
@@ -72,6 +73,22 @@ const UserScreen = ({ navigation, route }) => {
   // Add a ref to track component mounted state
   const isMounted = React.useRef(true);
 
+  useFocusEffect(
+    React.useCallback(() => {
+      const refreshRequired = route.params?.refreshData === true;
+      if (refreshRequired) {
+        console.log('UserScreen focused with refresh required, refetching data.');
+        if (profileUserId) {
+          fetchUserPosts(); // Re-fetch user posts
+        }
+        // Also refresh the user data like follower/following status
+        fetchUserProfile();
+        // Reset the param to avoid re-fetching on subsequent focus events
+        navigation.setParams({ refreshData: false });
+      }
+    }, [route.params?.refreshData, profileUserId])
+  );
+
   // Fetch user posts when component mounts
   useEffect(() => {
     isMounted.current = true;
@@ -81,16 +98,11 @@ const UserScreen = ({ navigation, route }) => {
       fetchUserProfile();
     }
     
-    // Add focus listener to refresh data when screen comes into focus
-    const unsubscribe = navigation.addListener('focus', () => {
-      if (isMounted.current && usernameParam) {
-        fetchUserProfile(); // Refresh profile data including follow counts
-      }
-    });
+    // The focus listener for refreshing has been replaced by useFocusEffect above.
+    // This reduces redundant data fetching on every focus event.
     
     return () => {
       isMounted.current = false;
-      unsubscribe(); // Clean up the focus listener
       // Cancel any pending state updates or animations
       setLoading(false);
     };
