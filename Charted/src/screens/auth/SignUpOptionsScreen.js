@@ -14,10 +14,12 @@ import * as SecureStore from 'expo-secure-store';
 import * as AppleAuthentication from 'expo-apple-authentication';
 import { GoogleSignin, statusCodes } from '@react-native-google-signin/google-signin';
 import axios from 'axios';
+import { useAuth } from '../../context/AuthContext';
 
 const transparentIcon = require('../../../assets/transparent_icon.png');
 
 const SignUpOptionsScreen = ({ navigation }) => {
+  const { updateAuthState } = useAuth();
   const [isAppleAvailable, setIsAppleAvailable] = useState(false);
   const [isAppleLoading, setIsAppleLoading] = useState(false);
   const [isGoogleLoading, setIsGoogleLoading] = useState(false);
@@ -114,11 +116,12 @@ const SignUpOptionsScreen = ({ navigation }) => {
           const hasAppleMusicConnection = user.appleMusicUserToken && user.appleMusicUserToken.trim() !== '';
 
           if (hasAppleMusicConnection) {
-            navigation.reset({
-              index: 0,
-              routes: [{ name: 'Main' }],
-            });
+            console.log('🍎 SignUpOptionsScreen: Apple sign-up successful with music connection, updating auth state');
+            // User has completed the full flow, update auth context
+            await updateAuthState({ token, user });
+            console.log('🎵 SignUpOptionsScreen: User has Apple Music, auth context will handle navigation');
           } else {
+            console.log('🎵 SignUpOptionsScreen: User needs to connect Apple Music first');
             const userIdForNav = user.userId.toString();
             navigation.navigate('ConnectMusicService', { userId: userIdForNav });
           }
@@ -195,11 +198,12 @@ const SignUpOptionsScreen = ({ navigation }) => {
           const hasAppleMusicConnection = user.appleMusicUserToken && user.appleMusicUserToken.trim() !== '';
 
           if (hasAppleMusicConnection) {
-            navigation.reset({
-              index: 0,
-              routes: [{ name: 'Main' }],
-            });
+            console.log('🔍 SignUpOptionsScreen: Google sign-up successful with music connection, updating auth state');
+            // User has completed the full flow, update auth context
+            await updateAuthState({ token, user });
+            console.log('🎵 SignUpOptionsScreen: User has Apple Music, auth context will handle navigation');
           } else {
+            console.log('🎵 SignUpOptionsScreen: User needs to connect Apple Music first');
             const userIdForNav = user.userId.toString();
             navigation.navigate('ConnectMusicService', { userId: userIdForNav });
           }

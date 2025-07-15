@@ -7,6 +7,7 @@ import { AppleMusicAuthProvider } from '@superfan-app/apple-music-auth';
 import { ActivityIndicator, View, Text } from 'react-native';
 import axios from 'axios';
 import { StripeProvider } from '@stripe/stripe-react-native';
+import { AuthProvider } from './src/context/AuthContext';
 
 const prefix = Linking.createURL('/');
 
@@ -60,14 +61,16 @@ export default function App() {
   }
 
   return (
-    <StripeProvider
-      publishableKey="pk_test_51RGuAWRw8T7S9cnNuHr4xqIsuPAdSHBubT5S4YYzA06wSgTWvGfFCHeNJma3EQRRZA5DpNWKrk096l31dcZg37Si00Sz4AesGq" // Replace with your actual publishable key
-    >
-      <AppleMusicAuthProvider developerToken={developerToken}>
-        <NavigationContainer linking={linking}>
-          <Navigator />
-        </NavigationContainer>
-      </AppleMusicAuthProvider>
-    </StripeProvider>
+    <AuthProvider>
+      <StripeProvider
+        publishableKey="pk_test_51RGuAWRw8T7S9cnNuHr4xqIsuPAdSHBubT5S4YYzA06wSgTWvGfFCHeNJma3EQRRZA5DpNWKrk096l31dcZg37Si00Sz4AesGq" // Replace with your actual publishable key
+      >
+        <AppleMusicAuthProvider developerToken={developerToken}>
+          <NavigationContainer linking={linking}>
+            <Navigator />
+          </NavigationContainer>
+        </AppleMusicAuthProvider>
+      </StripeProvider>
+    </AuthProvider>
   );
 }

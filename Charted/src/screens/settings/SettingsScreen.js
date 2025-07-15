@@ -14,8 +14,10 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import * as SecureStore from 'expo-secure-store';
 import axios from 'axios';
+import { useAuth } from '../../context/AuthContext';
 
 const SettingsScreen = ({ navigation }) => {
+  const { signOut } = useAuth();
   const [loading, setLoading] = useState(false);
   const [notificationsEnabled, setNotificationsEnabled] = useState(true);
   const [darkModeEnabled, setDarkModeEnabled] = useState(true);
@@ -25,29 +27,13 @@ const SettingsScreen = ({ navigation }) => {
   const handleLogout = async () => {
     try {
       setLoading(true);
-      
-      // Clear SecureStore
-      await SecureStore.deleteItemAsync('jwtToken');
-      await SecureStore.deleteItemAsync('userId');
-      await SecureStore.deleteItemAsync('username');
-      await SecureStore.deleteItemAsync('firstName');
-      await SecureStore.deleteItemAsync('lastName');
-      await SecureStore.deleteItemAsync('bio');
-      await SecureStore.deleteItemAsync('avatarUrl');
-      await SecureStore.deleteItemAsync('emailAddress');
-      await SecureStore.deleteItemAsync('followerCount');
-      await SecureStore.deleteItemAsync('followingCount');
-
-      await SecureStore.deleteItemAsync('authProvider');
-      await SecureStore.deleteItemAsync('loginMethod');
-      
-      // Navigate to Auth stack
-      navigation.reset({
-        index: 0,
-        routes: [{ name: 'SignIn' }],
-      });
+      console.log('⚙️ SettingsScreen: Logging out...');
+      await signOut();
+      console.log('✅ SettingsScreen: Logout successful, auth context will handle navigation.');
+      // No need to navigate manually, the AuthContext state change will trigger the navigator switch.
     } catch (error) {
-      console.error('Error during logout:', error);
+      console.error('❌ SettingsScreen: Error during logout:', error);
+      Alert.alert('Error', 'An unexpected error occurred during logout.');
       setLoading(false);
     }
   };

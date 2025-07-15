@@ -967,12 +967,11 @@ const HomeScreen = ({ navigation, route }) => {
           <Ionicons name="chevron-down" size={20} color="#FFFFFF" />
         </TouchableOpacity>
         
-        <TouchableOpacity 
-          style={styles.searchIconContainer}
-          onPress={() => navigation.navigate('SearchStack')}
-        >
-          <Ionicons name="search-outline" size={24} color="#FFFFFF" />
-        </TouchableOpacity>
+        <View style={styles.headerIcons}>
+          <TouchableOpacity style={styles.iconButton} onPress={() => navigation.navigate('SearchStack')}>
+            <Ionicons name="search-outline" size={24} color="#FFFFFF" />
+          </TouchableOpacity>
+        </View>
       </View>
       
       {/* Main Feed using FlatList */}

@@ -18,10 +18,12 @@ import axios from 'axios';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppleMusicAuth } from '@superfan-app/apple-music-auth';
+import { useAuth } from '../../context/AuthContext';
 
 const { width, height } = Dimensions.get('window');
 
 const ConnectMusicService = ({ navigation, route }) => {
+  const { updateAuthState } = useAuth();
   const [isConnectingAppleMusic, setIsConnectingAppleMusic] = useState(false);
   const { authState, requestAuthorization, getUserToken, isAuthenticating, error } = useAppleMusicAuth();
 
@@ -85,10 +87,32 @@ const ConnectMusicService = ({ navigation, route }) => {
       console.log('Backend call successful.');
   
       await SecureStore.setItemAsync('appleMusicConnected', 'true');
-      navigation.reset({
-        index: 0,
-        routes: [{ name: 'Post', params: { fromAuthFlow: true } }],
-      });
+      
+      // Get stored user data and update auth context to complete authentication flow
+      console.log('🎵 ConnectMusicService: Apple Music connected, updating auth state');
+      const [storedToken, storedUserId, storedUsername, storedName, storedEmail] = await Promise.all([
+        SecureStore.getItemAsync('jwtToken'),
+        SecureStore.getItemAsync('userId'),
+        SecureStore.getItemAsync('username'),
+        SecureStore.getItemAsync('name'),
+        SecureStore.getItemAsync('emailAddress')
+      ]);
+      
+      if (storedToken && storedUserId) {
+        const userData = {
+          userId: parseInt(storedUserId),
+          username: storedUsername,
+          name: storedName,
+          emailAddress: storedEmail,
+          appleMusicUserToken: userToken // Now connected
+        };
+        
+        await updateAuthState({ token: storedToken, user: userData });
+        console.log('✅ ConnectMusicService: Auth context updated, user will be redirected to main app');
+      } else {
+        console.error('❌ ConnectMusicService: Missing stored auth data');
+        Alert.alert('Error', 'Authentication data missing. Please sign in again.');
+      }
   
     } catch (e) {
       console.error('Error in handleConnectAppleMusic:', e);
@@ -185,10 +209,32 @@ const ConnectMusicService = ({ navigation, route }) => {
       if (response.status === 200) {
         console.log('✅ Apple Music User token stored successfully');
         await SecureStore.setItemAsync('appleMusicConnected', 'true');
-        navigation.reset({
-          index: 0,
-          routes: [{ name: 'Post', params: { fromAuthFlow: true } }],
-        });
+        
+        // Get stored user data and update auth context to complete authentication flow
+        console.log('🎵 ConnectMusicService: Apple Music connected (connectAppleMusic), updating auth state');
+        const [storedToken, storedUserId, storedUsername, storedName, storedEmail] = await Promise.all([
+          SecureStore.getItemAsync('jwtToken'),
+          SecureStore.getItemAsync('userId'),
+          SecureStore.getItemAsync('username'),
+          SecureStore.getItemAsync('name'),
+          SecureStore.getItemAsync('emailAddress')
+        ]);
+        
+        if (storedToken && effectiveUserId) {
+          const userData = {
+            userId: parseInt(effectiveUserId),
+            username: storedUsername,
+            name: storedName,
+            emailAddress: storedEmail,
+            appleMusicUserToken: userToken // Now connected
+          };
+          
+          await updateAuthState({ token: storedToken, user: userData });
+          console.log('✅ ConnectMusicService: Auth context updated, user will be redirected to main app');
+        } else {
+          console.error('❌ ConnectMusicService: Missing stored auth data');
+          Alert.alert('Error', 'Authentication data missing. Please sign in again.');
+        }
       } else {
         throw new Error(response.data.message || 'Failed to store user token on the server.');
       }
